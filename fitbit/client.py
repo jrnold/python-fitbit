@@ -2,6 +2,7 @@ import xml.etree.ElementTree as ET
 import datetime
 import urllib, urllib2
 import logging
+import re
 
 _log = logging.getLogger("fitbit")
 
@@ -47,7 +48,8 @@ class Client(object):
         For days with multiple sleeps, you need to provide the sleep_id
         or you will just get the first sleep of the day
         """
-        return self._graphdata_intraday_sleep_request("intradaySleep", date, sleep_id=sleep_id)
+        return self._graphdata_intraday_sleep_request("intradaySleep", date,
+                                                      sleep_id=sleep_id)
     
     def _request(self, path, parameters):
         # Throw out parameters where the value is not None
@@ -55,7 +57,8 @@ class Client(object):
         
         query_str = urllib.urlencode(parameters)
 
-        request = urllib2.Request("%s%s?%s" % (self.url_base, path, query_str), headers={"Cookie": self._request_cookie})
+        request = urllib2.Request("%s%s?%s" % (self.url_base, path, query_str),
+                                  headers={"Cookie": self._request_cookie})
         _log.debug("requesting: %s", request.get_full_url())
 
         data = None
@@ -88,7 +91,8 @@ class Client(object):
         return self._request("/graph/getGraphData", params)
 
     def _graphdata_intraday_request(self, graph_type, date):
-        # This method used for the standard case for most intraday calls (data for each 5 minute range)
+        # This method used for the standard case for most intraday calls
+        # (data for each 5 minute range)
         xml = self._graphdata_intraday_xml_request(graph_type, date)
         
         base_time = datetime.datetime.combine(date, datetime.time())
