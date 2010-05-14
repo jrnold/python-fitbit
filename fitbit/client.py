@@ -6,6 +6,17 @@ import re
 
 _log = logging.getLogger("fitbit")
 
+
+## Methods in FitbitClient.pm to add
+# historical data with aggregate info
+# 'active_hours_historical' => 'minutesActive',
+# 'active_score_historical' => 'activeScore',
+# 'calorie_historical'      => 'caloriesInOut',
+# 'distance_historical'     => 'distanceFromSteps',
+# 'steps_historical'        => 'stepsTaken',
+# 'sleep_time_historical'   => 'timeAsleep',
+# 'wakeup_historical'       => 'timesWokenUp'
+
 class Client(object):
     """A simple API client for the www.fitbit.com website.
     see README for more details
@@ -17,7 +28,9 @@ class Client(object):
         self.uid = uid
         self.uis = uis
         self.url_base = url_base
-        self._request_cookie = "sid=%s; uid=%s; uis=%s" % (sid, uid, uis)
+
+    def _request_cookie(self):
+        return  "sid=%s; uid=%s; uis=%s" % (self.sid, self.uid, self.uis)
     
     def intraday_calories_burned(self, date):
         """Retrieve the calories burned every 5 minutes
@@ -58,7 +71,7 @@ class Client(object):
         query_str = urllib.urlencode(parameters)
 
         request = urllib2.Request("%s%s?%s" % (self.url_base, path, query_str),
-                                  headers={"Cookie": self._request_cookie})
+                                  headers={"Cookie": self._request_cookie()})
         _log.debug("requesting: %s", request.get_full_url())
 
         data = None
@@ -74,7 +87,8 @@ class Client(object):
 
         return ET.fromstring(data.strip())
 
-    def _graphdata_intraday_xml_request(self, graph_type, date, data_version=2108, **kwargs):
+    def _graphdata_intraday_xml_request(self, graph_type, date, data_version=2108,
+                                        **kwargs):
         params = dict(
             userId=self.user_id,
             type=graph_type,
@@ -96,8 +110,10 @@ class Client(object):
         xml = self._graphdata_intraday_xml_request(graph_type, date)
         
         base_time = datetime.datetime.combine(date, datetime.time())
-        timestamps = [base_time + datetime.timedelta(minutes=m) for m in xrange(0, 288*5, 5)]
-        values = [int(float(v.text)) for v in xml.findall("data/chart/graphs/graph/value")]
+        timestamps = [base_time + datetime.timedelta(minutes=m)
+                      for m in xrange(0, 288*5, 5)]
+        values = [int(float(v.text))
+                  for v in xml.findall("data/chart/graphs/graph/value")]
         return zip(timestamps, values)
     
     def _graphdata_intraday_sleep_request(self, graph_type, date, sleep_id=None):
@@ -123,10 +139,12 @@ class Client(object):
         for timestamp in timestamps:
             if last_stamp and last_stamp > timestamp:
                 base_date += datetime.timedelta(days=1)
-            datetimes.append(datetime.datetime.combine(base_date, timestamp.time()))
+            datetimes.append(datetime.datetime.combine(base_date,
+                                                       timestamp.time()))
             last_stamp = timestamp
         
-        values = [int(float(v.text)) for v in xml.findall("data/chart/graphs/graph/value")]
+        values = [int(float(v.text))
+                  for v in xml.findall("data/chart/graphs/graph/value")]
         return zip(datetimes, values)
 
 def _strptimestamps(x):
