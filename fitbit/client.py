@@ -98,11 +98,12 @@ class Client(object):
     
     def _graphdata_intraday_sleep_request(self, graph_type, date, sleep_id=None):
         # Sleep data comes back a little differently
-        xml = self._graphdata_intraday_xml_request(graph_type, date, data_version=2112, arg=sleep_id)
-        
+        xml = self._graphdata_intraday_xml_request(graph_type, date,
+                                                   data_version=2112, arg=sleep_id)
         
         elements = xml.findall("data/chart/graphs/graph/value")
-        timestamps = [datetime.datetime.strptime(e.attrib['description'].split(' ')[-1], "%I:%M%p") for e in elements]
+        timestamps = [_strptimestamps(e.attrib['description'].split(' ')[-1])
+                      for e in elements]
         
         # TODO: better way to figure this out?
         # Check if the timestamp cross two different days
@@ -123,3 +124,15 @@ class Client(object):
         
         values = [int(float(v.text)) for v in xml.findall("data/chart/graphs/graph/value")]
         return zip(datetimes, values)
+
+def _strptimestamps(x):
+    """ Parse timestamps from the intradaySleep for both 12 and 24 hour formats.
+    """
+    # I couldn't find an xml element that indicates whether it is  12 or 24 hour
+    # so I just use regex
+    if re.match("[AP]M", x, re.I):
+        fmt = "%I:%M%p"
+    else:
+        fmt = "%H:%M"
+    return datetime.datetime.strptime(x, fmt)
+        
