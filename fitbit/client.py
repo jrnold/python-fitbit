@@ -53,15 +53,16 @@ class Client(object):
     def _request_cookie(self):
         return  "sid=%s; uid=%s; uis=%s" % (self.sid, self.uid, self.uis)
 
-    def _request(self, path, parameters):
-        # Throw out parameters where the value is not None
-        parameters = dict([(k,v) for k,v in parameters.items() if v])
-        
-        query_str = urllib.urlencode(parameters)
+    def _request(self, path, **kwargs):
 
-        ## TODO: if query string is empty, then there is an error.
-        request = urllib2.Request("%s%s?%s" % (self.url_base, path, query_str),
-                                  headers={"Cookie": self._request_cookie()})
+        parameters = dict([(k,v) for k,v in kwargs.items() if v])
+        if parameters:
+            query_str = '?' + urllib.urlencode(parameters)
+        else:
+            query_str = ''
+
+        url = self.url_base + path + query_str
+        request = urllib2.Request(url, headers={"Cookie": self._request_cookie()})
         _log.debug("requesting: %s", request.get_full_url())
 
         data = None
@@ -74,8 +75,7 @@ class Client(object):
             httperror.close()
 
         #_log.debug("response: %s", data)
-
-        return etree.fromstring(data.strip())
+        return data
 
     def _graphdata_xml_request(self, graph_type, date, data_version=2108,
                                         **kwargs):
@@ -92,7 +92,8 @@ class Client(object):
         if kwargs:
             params.update(kwargs)
 
-        return self._request("/graph/getGraphData", params)
+        data = self._request("/graph/getGraphData", **params)
+        return etree.fromstring(data.strip())
 
     def _graphdata_intraday_request(self, graph_type, date):
         # This method used for the standard case for most intraday calls
