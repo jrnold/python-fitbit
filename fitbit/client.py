@@ -1,21 +1,10 @@
-import xml.etree.ElementTree as ET
+from lxml import etree
 import datetime
 import urllib, urllib2
 import logging
 import re
 
 _log = logging.getLogger("fitbit")
-
-
-## Methods in FitbitClient.pm to add
-# historical data with aggregate info
-# 'active_hours_historical' => 'minutesActive',
-# 'active_score_historical' => 'activeScore',
-# 'calorie_historical'      => 'caloriesInOut',
-# 'distance_historical'     => 'distanceFromSteps',
-# 'steps_historical'        => 'stepsTaken',
-# 'sleep_time_historical'   => 'timeAsleep',
-# 'wakeup_historical'       => 'timesWokenUp'
 
 class Client(object):
     """A simple API client for the www.fitbit.com website.
@@ -29,9 +18,6 @@ class Client(object):
         self.uis = uis
         self.url_base = url_base
 
-    def _request_cookie(self):
-        return  "sid=%s; uid=%s; uis=%s" % (self.sid, self.uid, self.uis)
-    
     def intraday_calories_burned(self, date):
         """Retrieve the calories burned every 5 minutes
         the format is: [(datetime.datetime, calories_burned), ...]
@@ -63,13 +49,17 @@ class Client(object):
         """
         return self._graphdata_intraday_sleep_request("intradaySleep", date,
                                                       sleep_id=sleep_id)
-    
+
+    def _request_cookie(self):
+        return  "sid=%s; uid=%s; uis=%s" % (self.sid, self.uid, self.uis)
+
     def _request(self, path, parameters):
         # Throw out parameters where the value is not None
         parameters = dict([(k,v) for k,v in parameters.items() if v])
         
         query_str = urllib.urlencode(parameters)
 
+        ## TODO: if query string is empty, then there is an error.
         request = urllib2.Request("%s%s?%s" % (self.url_base, path, query_str),
                                   headers={"Cookie": self._request_cookie()})
         _log.debug("requesting: %s", request.get_full_url())
@@ -85,9 +75,9 @@ class Client(object):
 
         #_log.debug("response: %s", data)
 
-        return ET.fromstring(data.strip())
+        return etree.fromstring(data.strip())
 
-    def _graphdata_intraday_xml_request(self, graph_type, date, data_version=2108,
+    def _graphdata_xml_request(self, graph_type, date, data_version=2108,
                                         **kwargs):
         params = dict(
             userId=self.user_id,
@@ -107,7 +97,7 @@ class Client(object):
     def _graphdata_intraday_request(self, graph_type, date):
         # This method used for the standard case for most intraday calls
         # (data for each 5 minute range)
-        xml = self._graphdata_intraday_xml_request(graph_type, date)
+        xml = self._graphdata_xml_request(graph_type, date)
         
         base_time = datetime.datetime.combine(date, datetime.time())
         timestamps = [base_time + datetime.timedelta(minutes=m)
@@ -115,11 +105,11 @@ class Client(object):
         values = [int(float(v.text))
                   for v in xml.findall("data/chart/graphs/graph/value")]
         return zip(timestamps, values)
-    
+
     def _graphdata_intraday_sleep_request(self, graph_type, date, sleep_id=None):
         # Sleep data comes back a little differently
-        xml = self._graphdata_intraday_xml_request(graph_type, date,
-                                                   data_version=2112, arg=sleep_id)
+        xml = self._graphdata_xml_request(graph_type, date,
+                                          data_version=2112, arg=sleep_id)
         
         elements = xml.findall("data/chart/graphs/graph/value")
         timestamps = [_strptimestamps(e.attrib['description'].split(' ')[-1])
@@ -147,6 +137,54 @@ class Client(object):
                   for v in xml.findall("data/chart/graphs/graph/value")]
         return zip(datetimes, values)
 
+
+    def _dashboard_request(self, date):
+        path = date.strftime("%Y/%m/%d")
+        req = self._request(path, {})
+        print req
+
+    def _get_historical_data(self, graph, date, gid=0, period='1d'):
+        el = c._graphdata_xml_request(graph, date, period=period)
+        values = el.findall("data/chart/graphs/graph")[gid].findall("value")
+        # This is a dirty fix since the weight graphs have 3 value observations for some reason.
+        # I only care about values with url attributes 
+        values = filter( lambda x: x.get('url') , values)
+        data = [ (_parseDatePath(v.get('url')), float(v.text)) for v in values]
+        return data
+
+    # Historical Data to grab
+    def historical(self, date, period='1d'):
+        # I think valid period values are [1d, 7d, 1m, 3m, 6m, 1y, max] 
+        # The period argument seems to be ignored by the intraday graphs
+        historical_args = {
+            'caloriesBurned': {'graph': 'caloriesInOut', 'gid': 0},
+            'caloriesEaten': {'graph': 'caloriesInOut', 'gid': 1},
+            'activeScore': {'graph': 'activeScore', 'gid': 0},
+            'distanceFromSteps': {'graph': 'distanceFromSteps', 'gid': 0},
+            'stepsTaken': {'graph': 'stepsTaken', 'gid': 0},
+            'activeScore': {'graph': 'activeScore', 'gid': 0},
+            'hrsActiveLight': {'graph': 'minutesActive', 'gid': 0},
+            'hrsActiveFairly': {'graph': 'minutesActive', 'gid': 1},
+            'hrsActiveVery': {'graph': 'minutesActive', 'gid': 2},
+            'timesWokenUp': {'graph': 'timesWokenUp', 'gid': 0},
+            'timeAsleep': {'graph': 'timeAsleep', 'gid': 0},
+            ## Weight items need to check gid values
+            'currentWeight': {'graph': 'weight', 'gid': 0},
+            'targetWeight': {'graph': 'weight', 'gid': 1}
+            }
+
+        # Pull each variable
+        hist_data = dict([ (k, self._get_historical_data(v['graph'], date,
+                                                         gid=v['gid'], period=period))
+                           for k,v in historical_args.iteritems() ])
+        
+        # convert into a list with a dict object for each day
+        obs = len(hist_data.values()[0])
+        hist_data = [ dict([('date', hist_data.values()[0][i][0])] +
+                           [(k, v[i][1]) for k, v in hist_data.iteritems()])
+                      for i in range(obs) ]
+        return hist_data
+
 def _strptimestamps(x):
     """ Parse timestamps from the intradaySleep for both 12 and 24 hour formats.
     """
@@ -158,3 +196,7 @@ def _strptimestamps(x):
         fmt = "%H:%M"
     return datetime.datetime.strptime(x, fmt)
         
+def _parseDatePath(x):
+    """ returns a date object from a string like /path/yyyy/mm/dd """
+    return datetime.date(*[int(d) for d in x.split("/")[-3:]])
+
