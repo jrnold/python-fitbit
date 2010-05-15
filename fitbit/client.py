@@ -138,12 +138,6 @@ class Client(object):
                   for v in xml.findall("data/chart/graphs/graph/value")]
         return zip(datetimes, values)
 
-
-    def _dashboard_request(self, date):
-        path = date.strftime("%Y/%m/%d")
-        req = self._request(path, {})
-        print req
-
     def _get_historical_data(self, graph, date, gid=0, period='1d'):
         el = c._graphdata_xml_request(graph, date, period=period)
         values = el.findall("data/chart/graphs/graph")[gid].findall("value")
@@ -186,6 +180,37 @@ class Client(object):
                       for i in range(obs) ]
         return hist_data
 
+    def sleep_records(self, date):
+        dailyRecords = []
+        html = lxml.html.fromstring(self._request("/sleep/" + _date_to_path(date)))
+        # Sleep data element
+        sleepRecords = html.get_element_by_id("sleep").findall('div')
+        for record in sleepRecords:
+            data = {'date': date}
+            data['id'] = int(record.get('id').split('.')[1])
+            
+            sleepIndicator = record.get_element_by_id('sleepIndicator')
+            quality = SLEEP_QUALITY[ sleepIndicator.get('class') ]
+            efficiency = _pct_to_int(sleepIndicator.find('span').find('span').text)
+            data['quality'] = quality
+            data['efficiency'] = efficiency
+            
+            LINES = ['toBedAt', 'timeFallAsleep', 'timesAwakened', 'timeInBed', 'timeAsleep']
+            summary = record.get_element_by_id('sleepSummary')
+            print etree.tostring(summary)
+            summaryData =  dict(zip(LINES, [x.findall('span')[1].text for x in summary.findall('li')]))
+            data.update(summaryData)
+
+            for x in ['timeFallAsleep', 'timeInBed', 'timeAsleep']:
+                data[x] = _timestr_to_hrs(data[x])
+
+            data['toBedAt'] = datetime.datetime.strptime(data['toBedAt'].strip(),
+                                                         '%a %b %d %H:%M:%S UTC %Y')
+
+            dailyRecords += [ data ]
+        return dailyRecords
+
+
 def _strptimestamps(x):
     """ Parse timestamps from the intradaySleep for both 12 and 24 hour formats.
     """
@@ -200,4 +225,25 @@ def _strptimestamps(x):
 def _parseDatePath(x):
     """ returns a date object from a string like /path/yyyy/mm/dd """
     return datetime.date(*[int(d) for d in x.split("/")[-3:]])
+
+def _date_to_path(x):
+    """ converts date to path string like yyyy/mm/dd"""
+    
+    return x.strftime("%Y/%m/%d")
+
+def _pct_to_int(x):
+    return int(x.replace('%', ''))
+
+def _timestr_to_hrs(x):
+    regex = re.compile('((?P<hrs>\d+)hrs?)?\s*(?P<min>\d+)min')
+    m = regex.match(x)
+    if m.group('hrs'):
+        hrs = float(m.group('hrs'))
+    else:
+        hrs = 0
+    if m.group('min'):
+        minutes = float(m.group('min'))
+    else:
+        minutes = 0
+    return hrs + (minutes / 60.0)
 
