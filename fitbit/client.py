@@ -180,7 +180,7 @@ class Client(object):
                       for i in range(obs) ]
         return hist_data
 
-    def sleep_records(self, date):
+    def sleep_log(self, date):
         dailyRecords = []
         html = lxml.html.fromstring(self._request("/sleep/" + _date_to_path(date)))
         # Sleep data element
@@ -197,7 +197,6 @@ class Client(object):
             
             LINES = ['toBedAt', 'timeFallAsleep', 'timesAwakened', 'timeInBed', 'timeAsleep']
             summary = record.get_element_by_id('sleepSummary')
-            print etree.tostring(summary)
             summaryData =  dict(zip(LINES, [x.findall('span')[1].text for x in summary.findall('li')]))
             data.update(summaryData)
 
