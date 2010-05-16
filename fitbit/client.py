@@ -20,23 +20,20 @@ class Client(object):
 
     def intraday_calories_burned(self, date):
         """Retrieve the calories burned every 5 minutes
-        the format is: [(datetime.datetime, calories_burned), ...]
         """
         return self._graphdata_intraday_request("intradayCaloriesBurned", date)
     
     def intraday_active_score(self, date):
         """Retrieve the active score for every 5 minutes
-        the format is: [(datetime.datetime, active_score), ...]
         """
         return self._graphdata_intraday_request("intradayActiveScore", date)
 
     def intraday_steps(self, date):
         """Retrieve the steps for every 5 minutes
-        the format is: [(datetime.datetime, steps), ...]
         """
         return self._graphdata_intraday_request("intradaySteps", date)
     
-    def intraday_sleep(self, date, sleep_id=None):
+    def intraday_sleep(self, date):
         """Retrieve the sleep status for every 1 minute interval
         the format is: [(datetime.datetime, sleep_value), ...]
         The statuses are:
@@ -44,11 +41,89 @@ class Client(object):
             1: asleep
             2: awake
             3: very awake
-        For days with multiple sleeps, you need to provide the sleep_id
-        or you will just get the first sleep of the day
         """
-        return self._graphdata_intraday_sleep_request("intradaySleep", date,
-                                                      sleep_id=sleep_id)
+        sleep_log = self.sleep_log(date)
+
+        data = []
+        for sleep in  sleep_log:
+            sleep_id = sleep['id']
+            toBedAt = sleep['toBedAt']
+            values = self._graphdata_values('intradaySleep', date,
+                                            args=sleep_id)
+            for i,x in enumerate(values):
+                obs = {'sleep_id': sleep_id}
+                obs['tod'] = toBedAt + datetime.timedelta(minutes=i)
+                obs['value'] = x
+                data += [obs]
+        return data
+
+    # Historical Data to grab
+    def historical(self, date, period='1d'):
+        """ Return historical data for a day, or period of days.
+
+        I think valid period values are [1d, 7d, 1m, 3m, 6m, 1y, max]
+        where max returns all days since the user signed up
+        """
+        historical_args = {
+            'caloriesBurned': {'graph': 'caloriesInOut', 'gid': 0},
+            'caloriesEaten': {'graph': 'caloriesInOut', 'gid': 1},
+            'activeScore': {'graph': 'activeScore', 'gid': 0},
+            'distanceFromSteps': {'graph': 'distanceFromSteps', 'gid': 0},
+            'stepsTaken': {'graph': 'stepsTaken', 'gid': 0},
+            'activeScore': {'graph': 'activeScore', 'gid': 0},
+            'hrsActiveLight': {'graph': 'minutesActive', 'gid': 0},
+            'hrsActiveFairly': {'graph': 'minutesActive', 'gid': 1},
+            'hrsActiveVery': {'graph': 'minutesActive', 'gid': 2},
+            'timesWokenUp': {'graph': 'timesWokenUp', 'gid': 0},
+            'timeAsleep': {'graph': 'timeAsleep', 'gid': 0},
+            ## Weight items need to check gid values
+            'currentWeight': {'graph': 'weight', 'gid': 0},
+            'targetWeight': {'graph': 'weight', 'gid': 1}
+            }
+
+        # Pull each variable
+        hist_data = dict([ (k, self._historical_data_request(v['graph'], date,
+                                                             gid=v['gid'], period=period))
+                           for k,v in historical_args.iteritems() ])
+        
+        # convert into a list with a dict object for each day
+        obs = len(hist_data.values()[0])
+        hist_data = [ dict([('date', hist_data.values()[0][i][0])] +
+                           [(k, v[i][1]) for k, v in hist_data.iteritems()])
+                      for i in range(obs) ]
+        return hist_data
+
+    def sleep_log(self, date):
+        """ Return summary of sleep on date.
+        This is the data that appears on www.fitbit.com/sleep
+        """
+        dailyRecords = []
+        html = lxml.html.fromstring(self._request("/sleep/" + _date_to_path(date)))
+        # Sleep data element
+        sleepRecords = html.get_element_by_id("sleep").findall('div')
+        for record in sleepRecords:
+            data = {'date': date}
+            data['id'] = int(record.get('id').split('.')[1])
+            
+            sleepIndicator = record.get_element_by_id('sleepIndicator')
+            quality = SLEEP_QUALITY[ sleepIndicator.get('class') ]
+            efficiency = _pct_to_int(sleepIndicator.find('span').find('span').text)
+            data['quality'] = quality
+            data['efficiency'] = efficiency
+            
+            LINES = ['toBedAt', 'timeFallAsleep', 'timesAwakened', 'timeInBed', 'timeAsleep']
+            summary = record.get_element_by_id('sleepSummary')
+            summaryData =  dict(zip(LINES, [x.findall('span')[1].text for x in summary.findall('li')]))
+            data.update(summaryData)
+
+            for x in ['timeFallAsleep', 'timeInBed', 'timeAsleep']:
+                data[x] = _timestr_to_hrs(data[x])
+
+            data['toBedAt'] = datetime.datetime.strptime(data['toBedAt'].strip(),
+                                                         '%a %b %d %H:%M:%S UTC %Y')
+
+            dailyRecords += [ data ]
+        return dailyRecords
 
     def _request_cookie(self):
         return  "sid=%s; uid=%s; uis=%s" % (self.sid, self.uid, self.uis)
@@ -98,47 +173,28 @@ class Client(object):
     def _graphdata_intraday_request(self, graph_type, date):
         # This method used for the standard case for most intraday calls
         # (data for each 5 minute range)
-        xml = self._graphdata_xml_request(graph_type, date)
-        
-        base_time = datetime.datetime.combine(date, datetime.time())
-        timestamps = [base_time + datetime.timedelta(minutes=m)
-                      for m in xrange(0, 288*5, 5)]
+        values = self._graphdata_values(graph_type, date)
+        dt = datetime.datetime(*date.timetuple()[:5])
+
+        data = []
+        # the last observation is midnight of the next day so I ignore it
+        for i,x in enumerate(values[:-1]):
+            obs = {}
+            obs['tod'] = dt + datetime.timedelta(minutes=(i * 5))
+            obs['value'] = x
+            data += [obs]
+                
+        return data
+
+    def _graphdata_values(self, graph_type, date, **kwargs):
+        # This method used for the standard case for most intraday calls
+        # (data for each 5 minute range)
+        xml = self._graphdata_xml_request(graph_type, date, **kwargs)
         values = [int(float(v.text))
                   for v in xml.findall("data/chart/graphs/graph/value")]
-        return zip(timestamps, values)
+        return values
 
-    def _graphdata_intraday_sleep_request(self, graph_type, date, sleep_id=None):
-        # Sleep data comes back a little differently
-        xml = self._graphdata_xml_request(graph_type, date,
-                                          data_version=2112, arg=sleep_id)
-        
-        elements = xml.findall("data/chart/graphs/graph/value")
-        timestamps = [_strptimestamps(e.attrib['description'].split(' ')[-1])
-                      for e in elements]
-        
-        # TODO: better way to figure this out?
-        # Check if the timestamp cross two different days
-        last_stamp = None
-        datetimes = []
-        base_date = date
-        for timestamp in timestamps:
-            if last_stamp and last_stamp > timestamp:
-                base_date -= datetime.timedelta(days=1)
-            last_stamp = timestamp
-        
-        last_stamp = None
-        for timestamp in timestamps:
-            if last_stamp and last_stamp > timestamp:
-                base_date += datetime.timedelta(days=1)
-            datetimes.append(datetime.datetime.combine(base_date,
-                                                       timestamp.time()))
-            last_stamp = timestamp
-        
-        values = [int(float(v.text))
-                  for v in xml.findall("data/chart/graphs/graph/value")]
-        return zip(datetimes, values)
-
-    def _get_historical_data(self, graph, date, gid=0, period='1d'):
+    def _historical_data_request(self, graph, date, gid=0, period='1d'):
         el = c._graphdata_xml_request(graph, date, period=period)
         values = el.findall("data/chart/graphs/graph")[gid].findall("value")
         # This is a dirty fix since the weight graphs have 3 value observations for some reason.
@@ -146,68 +202,6 @@ class Client(object):
         values = filter( lambda x: x.get('url') , values)
         data = [ (_parseDatePath(v.get('url')), float(v.text)) for v in values]
         return data
-
-    # Historical Data to grab
-    def historical(self, date, period='1d'):
-        # I think valid period values are [1d, 7d, 1m, 3m, 6m, 1y, max] 
-        # The period argument seems to be ignored by the intraday graphs
-        historical_args = {
-            'caloriesBurned': {'graph': 'caloriesInOut', 'gid': 0},
-            'caloriesEaten': {'graph': 'caloriesInOut', 'gid': 1},
-            'activeScore': {'graph': 'activeScore', 'gid': 0},
-            'distanceFromSteps': {'graph': 'distanceFromSteps', 'gid': 0},
-            'stepsTaken': {'graph': 'stepsTaken', 'gid': 0},
-            'activeScore': {'graph': 'activeScore', 'gid': 0},
-            'hrsActiveLight': {'graph': 'minutesActive', 'gid': 0},
-            'hrsActiveFairly': {'graph': 'minutesActive', 'gid': 1},
-            'hrsActiveVery': {'graph': 'minutesActive', 'gid': 2},
-            'timesWokenUp': {'graph': 'timesWokenUp', 'gid': 0},
-            'timeAsleep': {'graph': 'timeAsleep', 'gid': 0},
-            ## Weight items need to check gid values
-            'currentWeight': {'graph': 'weight', 'gid': 0},
-            'targetWeight': {'graph': 'weight', 'gid': 1}
-            }
-
-        # Pull each variable
-        hist_data = dict([ (k, self._get_historical_data(v['graph'], date,
-                                                         gid=v['gid'], period=period))
-                           for k,v in historical_args.iteritems() ])
-        
-        # convert into a list with a dict object for each day
-        obs = len(hist_data.values()[0])
-        hist_data = [ dict([('date', hist_data.values()[0][i][0])] +
-                           [(k, v[i][1]) for k, v in hist_data.iteritems()])
-                      for i in range(obs) ]
-        return hist_data
-
-    def sleep_log(self, date):
-        dailyRecords = []
-        html = lxml.html.fromstring(self._request("/sleep/" + _date_to_path(date)))
-        # Sleep data element
-        sleepRecords = html.get_element_by_id("sleep").findall('div')
-        for record in sleepRecords:
-            data = {'date': date}
-            data['id'] = int(record.get('id').split('.')[1])
-            
-            sleepIndicator = record.get_element_by_id('sleepIndicator')
-            quality = SLEEP_QUALITY[ sleepIndicator.get('class') ]
-            efficiency = _pct_to_int(sleepIndicator.find('span').find('span').text)
-            data['quality'] = quality
-            data['efficiency'] = efficiency
-            
-            LINES = ['toBedAt', 'timeFallAsleep', 'timesAwakened', 'timeInBed', 'timeAsleep']
-            summary = record.get_element_by_id('sleepSummary')
-            summaryData =  dict(zip(LINES, [x.findall('span')[1].text for x in summary.findall('li')]))
-            data.update(summaryData)
-
-            for x in ['timeFallAsleep', 'timeInBed', 'timeAsleep']:
-                data[x] = _timestr_to_hrs(data[x])
-
-            data['toBedAt'] = datetime.datetime.strptime(data['toBedAt'].strip(),
-                                                         '%a %b %d %H:%M:%S UTC %Y')
-
-            dailyRecords += [ data ]
-        return dailyRecords
 
 
 def _strptimestamps(x):
