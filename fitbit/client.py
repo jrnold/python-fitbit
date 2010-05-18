@@ -123,13 +123,70 @@ class Client(object):
             data.update(summaryData)
 
             for x in ['timeFallAsleep', 'timeInBed', 'timeAsleep']:
-                data[x] = _timestr_to_hrs(data[x])
+                data[x] = _record_duration(data[x])
 
             data['toBedAt'] = datetime.datetime.strptime(data['toBedAt'].strip(),
                                                          '%a %b %d %H:%M:%S UTC %Y')
 
             dailyRecords += [ data ]
         return dailyRecords
+
+    def logged_activities(self, date):
+
+        dailyRecords = []
+        html = lxml.html.fromstring(self._request("/activities/" + _date_to_path(date)))
+        activityList = html.get_element_by_id("activityList")
+        for li in activityList.findall(".//li"):
+            li_id = li.get('id')
+            ## not an activity log
+            if not li_id:
+                continue
+
+            data = _parse_activity_log(li, date)
+
+            dailyRecords += [ data ]
+        return dailyRecords
+
+    def activity_records(self, date):
+        dailyRecords = []
+        html = lxml.html.fromstring(self._request("/activities/" + _date_to_path(date)))
+        activityRecords = html.get_element_by_id("activityRecords").findall("div")
+        for record in activityRecords:
+            # not a record
+            if not record.get('id'):
+                continue
+            data = _parse_activity_record(record, date)
+
+            dailyRecords += [ data ]
+        return dailyRecords
+
+    def intraday_activity_records(self, date):
+        activity_records = self.activity_records(date)
+
+        data = []
+        for record in activity_records:
+            activity_id = record['id']
+            startedAt = record['startedAt']
+            km = record['km']
+            calories = self._activity_record_values(date, activity_id, 'Calories')
+            steps = self._activity_record_values(date, activity_id, 'Steps')
+            pace = [ datetime.timedelta(seconds=(i * 60))
+                     for i in self._activity_record_values(date, activity_id, 'Pace')]
+            speed = self._activity_record_values(date, activity_id, 'Speed')
+            time = [ startedAt + datetime.timedelta(minutes=i) for i in range(len(calories)) ]
+            for x in zip(time, calories, steps, pace, speed):
+                row = {'date': date, 'id': activity_id, 'km': km}
+                row.update(dict(zip(['time', 'calories', 'steps', 'pace', 'speed'], x)))
+                data += [row]
+
+        return data
+
+
+    def _activity_record_values(self, date, activity_id, charttype):
+        return self._graphdata_values('activityRecord' + charttype, date,
+                               arg=activity_id,
+                               valuesCategoryEnabled='true',
+                               dataVersion=58)
 
     def _request_cookie(self):
         return  "sid=%s; uid=%s; uis=%s" % (self.sid, self.uid, self.uis)
@@ -195,7 +252,7 @@ class Client(object):
         # This method used for the standard case for most intraday calls
         # (data for each 5 minute range)
         xml = self._graphdata_xml_request(graph_type, date, **kwargs)
-        values = [int(float(v.text))
+        values = [float(v.text)
                   for v in xml.findall("data/chart/graphs/graph/value")]
         return values
 
@@ -209,16 +266,73 @@ class Client(object):
         return data
 
 
-def _strptimestamps(x):
-    """ Parse timestamps from the intradaySleep for both 12 and 24 hour formats.
+def _parse_activity_record(el, date):
+    """ Return a dictionary of data from the html element containing an activity record"""
+    data = {'data': date}
+    data['id'] = int(el.get('id').split('.')[1])
+
+    # Start Time
+    # Ignore the end time since start time + duration = end time
+    timespan = _clean_text(el.find_class('heading')[0].text)
+    startedAt = re.search(r"from (\d+:\d+) to (\d+:\d+)", timespan).group(1)
+    data['startedAt'] =  _strptimestamps(' '.join([date.strftime("%Y/%m/%d"),
+                                                       startedAt]))
+    
+    cols = [ x.findall('span')[1].text
+             for x in el.find_class('record')[0].findall('ul/li') ]
+    data['duration'] = _record_duration(cols[0])
+    data['calories'] = int(cols[1])
+    data['steps'] = int(cols[2])
+    distance, km = _dist_entry(cols[3])
+    data['distance'] = distance
+    data['km'] = km
+    data['pace'] = _pace(cols[4])
+    return data
+
+def _parse_activity_log(el, date):
+    """ Return a dictionary of data from the html element containing a logged activity"""
+    data = {'date': date}
+
+    # Logged Activity id
+    data['id'] =  int(el.get('id').split('_')[1])
+
+    # Activity description 
+    col1 = el.find_class('cols1')[0]
+    data['activity'] = _clean_text(col1.find("a").text)
+
+    ## Activity start time
+    startedAt = _clean_text(col1.find("p").text)
+    startedAt = re.search('\d+:\d+\s*(am|pm)?', startedAt, re.I).group(0)
+    data['startedAt'] =  _strptimestamps(' '.join([date.strftime("%Y/%m/%d"),
+                                              startedAt]))
+
+    # Distance
+    dist = _clean_text(el.find_class('cols2')[0].text)
+    if dist != "N/A":
+        distance, km = _dist_entry(dist)
+        data['distance'] = distance
+        data['km'] = km
+
+    # Duration
+    duration = _activity_duration(el.find_class('cols3')[0].text)
+    data['duration'] = duration
+
+    # Calories
+    cals = _no_comma(el.find_class('cols4')[0].text)
+    data['cals'] = int(cals)
+
+    return data
+
+
+
+def _strptimestamps(x, dfmt = "%Y/%m/%d"):
+    """ Parse timestamps without knowing whether 24 or 12 hour format is used
     """
-    # I couldn't find an xml element that indicates whether it is  12 or 24 hour
-    # so I just use regex
-    if re.match("[AP]M", x, re.I):
-        fmt = "%I:%M%p"
+    if re.search("[AP]M", x, re.I):
+        tfmt = "%I:%M %p"
     else:
-        fmt = "%H:%M"
-    return datetime.datetime.strptime(x, fmt)
+        tfmt = "%H:%M"
+    return datetime.datetime.strptime(x, ' '.join([dfmt, tfmt]))
         
 def _parseDatePath(x):
     """ returns a date object from a string like /path/yyyy/mm/dd """
@@ -226,22 +340,64 @@ def _parseDatePath(x):
 
 def _date_to_path(x):
     """ converts date to path string like yyyy/mm/dd"""
-    
     return x.strftime("%Y/%m/%d")
 
-def _pct_to_int(x):
+def _no_comma(x):
+    return int(x.replace(',', ''))
+
+def _no_pct(x):
     return int(x.replace('%', ''))
 
-def _timestr_to_hrs(x):
+def _pace(x):
+    # handle determination of miles or km elsewhere
+    minutes, seconds = [ int(x) for x in x.split("/")[0].split(":")]
+    return datetime.timedelta(minutes=minutes, seconds=seconds)
+
+def _record_duration(x):
     regex = re.compile('((?P<hrs>\d+)hrs?)?\s*(?P<min>\d+)min')
     m = regex.match(x)
     if m.group('hrs'):
-        hrs = float(m.group('hrs'))
+        hours = float(m.group('hrs'))
     else:
-        hrs = 0
+        hours = 0
     if m.group('min'):
         minutes = float(m.group('min'))
     else:
         minutes = 0
-    return hrs + (minutes / 60.0)
+    duration = datetime.timedelta(hours=hours, minutes=minutes)
+    return duration
 
+def _activity_duration(x):
+    hpat = r"(?P<h>\d+)\s+hours?"
+    mpat = r"(?P<m>\d+)\s+minutes?"
+    spat = r"(?P<s>\d+)\s+seconds?"
+        
+    regex = re.compile('(%s)?\s*(%s)?\s*(%s)?' % (hpat, mpat, spat))
+    m = regex.match(x)
+    if m.group('h'):
+        hours = float(m.group('h'))
+    else:
+        hours = 0
+    if m.group('m'):
+        minutes = float(m.group('m'))
+    else:
+        minutes = 0
+    if m.group('s'):
+        seconds = float(m.group('s'))
+    else:
+        seconds = 0
+
+    duration = datetime.timedelta(hours=hours,
+                                  minutes=minutes,
+                                  seconds=seconds)
+    return duration
+
+def _dist_entry(x):
+    regex = re.compile('(?P<value>\d+(\.\d+)?)\s*(?P<unit>km|mi(les)?)')
+    m = regex.match(x)
+    val = float(m.group('value'))
+    km = (m.group('unit') == 'km')
+    return (val, km)
+    
+def _clean_text(x):
+    return re.sub('\s+', ' ', x).strip()
