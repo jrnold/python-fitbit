@@ -52,9 +52,9 @@ class Client(object):
             values = self._graphdata_values('intradaySleep', date,
                                             args=sleep_id)
             for i,x in enumerate(values):
-                obs = {'sleep_id': sleep_id}
-                obs['tod'] = toBedAt + datetime.timedelta(minutes=i)
-                obs['value'] = x
+                obs = {'sleep_id': sleep_id, 'date': date,
+                       'value': x}
+                obs['time'] = toBedAt + datetime.timedelta(minutes=i)
                 data += [obs]
         return data
 
@@ -98,6 +98,11 @@ class Client(object):
         """ Return summary of sleep on date.
         This is the data that appears on www.fitbit.com/sleep
         """
+
+        SLEEP_QUALITY ={'p1': 'poor',
+                        'p2': 'average',
+                        'p3': 'very restful'}
+        
         dailyRecords = []
         html = lxml.html.fromstring(self._request("/sleep/" + _date_to_path(date)))
         # Sleep data element
@@ -180,9 +185,8 @@ class Client(object):
         data = []
         # the last observation is midnight of the next day so I ignore it
         for i,x in enumerate(values[:-1]):
-            obs = {}
-            obs['tod'] = dt + datetime.timedelta(minutes=(i * 5))
-            obs['value'] = x
+            obs = {'date': date, 'value': x}
+            obs['time'] = dt + datetime.timedelta(minutes=(i * 5))
             data += [obs]
                 
         return data
