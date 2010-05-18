@@ -1,10 +1,11 @@
 from lxml import etree
+import lxml.html
 import datetime
 import urllib, urllib2
 import logging
 import re
 
-_log = logging.getLogger("fitbit")
+#_log = logging.getogger("fitbit")
 
 class Client(object):
     """A simple API client for the www.fitbit.com website.
@@ -195,7 +196,7 @@ class Client(object):
         return values
 
     def _historical_data_request(self, graph, date, gid=0, period='1d'):
-        el = c._graphdata_xml_request(graph, date, period=period)
+        el = self._graphdata_xml_request(graph, date, period=period)
         values = el.findall("data/chart/graphs/graph")[gid].findall("value")
         # This is a dirty fix since the weight graphs have 3 value observations for some reason.
         # I only care about values with url attributes 
