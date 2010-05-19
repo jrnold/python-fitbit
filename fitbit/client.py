@@ -72,9 +72,9 @@ class Client(object):
             'distanceFromSteps': {'graph': 'distanceFromSteps', 'gid': 0},
             'stepsTaken': {'graph': 'stepsTaken', 'gid': 0},
             'activeScore': {'graph': 'activeScore', 'gid': 0},
-            'hrsActiveLight': {'graph': 'minutesActive', 'gid': 0},
-            'hrsActiveFairly': {'graph': 'minutesActive', 'gid': 1},
-            'hrsActiveVery': {'graph': 'minutesActive', 'gid': 2},
+            'activeLight': {'graph': 'minutesActive', 'gid': 0},
+            'activeFairly': {'graph': 'minutesActive', 'gid': 1},
+            'activeVery': {'graph': 'minutesActive', 'gid': 2},
             'timesWokenUp': {'graph': 'timesWokenUp', 'gid': 0},
             'timeAsleep': {'graph': 'timeAsleep', 'gid': 0},
             ## Weight items need to check gid values
@@ -82,17 +82,24 @@ class Client(object):
             'targetWeight': {'graph': 'weight', 'gid': 1}
             }
 
-        # Pull each variable
-        hist_data = dict([ (k, self._historical_data_request(v['graph'], date,
-                                                             gid=v['gid'], period=period))
-                           for k,v in historical_args.iteritems() ])
-        
-        # convert into a list with a dict object for each day
-        obs = len(hist_data.values()[0])
-        hist_data = [ dict([('date', hist_data.values()[0][i][0])] +
-                           [(k, v[i][1]) for k, v in hist_data.iteritems()])
-                      for i in range(obs) ]
-        return hist_data
+        # Pull data each variable
+        hist_vals = zip( *[ self._historical_data_request(v['graph'], date,
+                                                            gid=v['gid'], period=period)
+                           for v in historical_args.values() ])
+
+        # Convert data to a list with a dictionary for each day
+        data = []
+        for day in hist_vals:
+            row = {}
+            row['date'] = day[0][0]
+            row.update(zip( historical_args.keys(), [x[1] for  x in day]))
+
+            # Put duration variables in unambiguous format
+            for i in ['activeLight', 'activeFairly', 'activeVery', 'timeAsleep']:
+                row[i] = datetime.timedelta(minutes = (row[i] * 60))
+            data += [row]
+            
+        return data
 
     def sleep_log(self, date):
         """ Return summary of sleep on date.
