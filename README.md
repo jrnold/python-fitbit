@@ -1,56 +1,50 @@
 # Overview
 
-This client provides a simple way to access your data on www.fitbit.com.
-I love my fitbit and I want to be able to use the raw data to make my own graphs.
-Currently, this client uses the endpoints used by the flash graphs.
-Once the official API is announced, this client will be updated to use it.
+This client provides an unofficial way to access your data on www.fitbit.com.
 
-Right now, you need to log in to the site with your username / password, and then grab some information from the cookie.
-The cookie will look like:
+This is a fork of http://github.com/wadey/python-fitbit, although I have made substantial 
+changes in functionality since the fork. The client returns data in a different format, and
+includes methods to capture historical data, all sleep and activity record summaries and details, 
+and logged activities.
+
+Currently, this client acquires its data from the webpage html and the
+xml endpoints used by the flash graphs.  Hopefully, the [promised
+official XML/JSON api](http://www.fitbit.com/faq#pcdump) will appear
+soon. Until then, I hope this ugly hack sufficies.
+
+Right now, you need to log in to the site with your username /
+password, and then grab some information from the cookie.  The cookie
+will look like:
 
     Cookie: sid=XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX; uid=12345; uis=XX%3D%3D;
+
+In Firefox, you can find the cookies by going throug the menud to
+Preferences -> Privacy -> Remove Individual Cookies.  Search for
+'fitbit.com'.  For each of the cookies with the name: 'uis', 'uid', or
+'sid', the value is in the Content field.
   
-Create a `fitbit.Client` with this data, plus the userId (which you can find at the end of your profile url)
+You will also need your user id, which is in the path of your profile
+url. For example, if your profile url looks like
+http://www.fitbit.com/user/123ABC, then your user id is 123ABC.
 
-# Example
+* Historical data per day
+* Intraday data 
 
-    import fitbit
+  * Steps Taken per 5 minutes
+  * Calories Burned per 5 minutes
+  * Active Acore per 5 minutes
 
-    client = fitbit.Client(user_id="XXX", sid="XXX", uid="XXX", uis="XXX")
+* Sleep record summary
+* Sleep record details per minute
+* Logged activities
+* Activity record summary
+* Activity record details: step, distance, pace, and speed per minute
 
-    # example data
-    data = client.intraday_steps(datetime.date(2010, 2, 21))
+There are a few examples below as well as a script to dump data to
+sqlite in the `examples` directory.
 
-    # data will be a list of tuples. example:
-    # [
-    #   (datetime.datetime(2010, 2, 21, 0, 0), 0),
-    #   (datetime.datetime(2010, 2, 21, 0, 5), 40),
-    #   ....
-    #   (datetime.datetime(2010, 2, 21, 23, 55), 64),
-    # ]
-    
-    # The timestamp is the beginning of the 5 minute range the value is for
-    
-    # Other API calls:
-    data = client.intraday_calories_burned(datetime.date(2010, 2, 21))
-    data = client.intraday_active_score(datetime.date(2010, 2, 21))
-    
-    # Sleep data is a little different:
-    data = client.intraday_sleep(datetime.date(2010, 2, 21))
-    
-    # data will be a similar list of tuples, but spaced one minute apart
-    # [
-    #   (datetime.datetime(2010, 2, 20, 23, 59), 2),
-    #   (datetime.datetime(2010, 2, 21, 0, 0), 1),
-    #   (datetime.datetime(2010, 2, 21, 0, 1), 1),
-    #   ....
-    #   (datetime.datetime(2010, 2, 21, 8, 34), 1),
-    # ]
-    
-    # The different values for sleep are:
-    #   0: no sleep data
-    #   1: asleep
-    #   2: awake
-    #   3: very awake
+Other data present in the fitbit was not added not due to any
+technical limitations, but because I personally had no need for
+it. I'm not aware of any reason why the Food and Journal data could
+not be grabbed.
 
-There is also an example dump script provided: `examples/dump.py`.  This script can be set up as a cron job to dump data nightly.
