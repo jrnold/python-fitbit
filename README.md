@@ -18,33 +18,33 @@ will look like:
 
     Cookie: sid=XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX; uid=12345; uis=XX%3D%3D;
 
-In Firefox, you can find the cookies by going throug the menud to
+In Firefox, you can find the cookies by navigating the menu to
 Preferences -> Privacy -> Remove Individual Cookies.  Search for
 'fitbit.com'.  For each of the cookies with the name: 'uis', 'uid', or
-'sid', the value is in the Content field.
+'sid', the value of the cookie is the 'Content' field.
   
-You will also need your user id, which is in the path of your profile
-url. For example, if your profile url looks like
+You will also need your user id (different from your user name). Your
+user id is found in the path of your profile url (click on the View
+profile link). For example, if your profile url looks like
 http://www.fitbit.com/user/123ABC, then your user id is 123ABC.
 
+# Data
+
+The client has methods to grab the following data 
+
 * Historical data per day
-* Intraday data 
-
-  * Steps Taken per 5 minutes
-  * Calories Burned per 5 minutes
-  * Active Acore per 5 minutes
-
+* Intraday Steps Taken (per 5 minutes)
+* Calories Burned (per 5 minutes)
+* Active Acore (per 5 minutes)
 * Sleep record summary
 * Sleep record details per minute
 * Logged activities
 * Activity record summary
 * Activity record details: step, distance, pace, and speed per minute
 
-There are a few examples below as well as a script to dump data to
-sqlite in the `examples` directory.
+Other data present on fitbit.com for which this api does not have method (such as Food and Journal data) was not omitted due any technical limitations of which I was aware, but because I personally had no need for it.
 
-Other data present in the fitbit was not added not due to any
-technical limitations, but because I personally had no need for
-it. I'm not aware of any reason why the Food and Journal data could
-not be grabbed.
+# Examples
+
+There are a few examples scripts in the [examples](http://github.com/jrnold/python-fitbit/tree/master/examples) directory.
 
