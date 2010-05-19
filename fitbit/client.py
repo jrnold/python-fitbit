@@ -1,11 +1,9 @@
 from lxml import etree
 import lxml.html
 import datetime
-import urllib, urllib2
-import logging
+import urllib
+import urllib2
 import re
-
-#_log = logging.getogger("fitbit")
 
 class Client(object):
     """A simple API client for the www.fitbit.com website.
@@ -52,7 +50,7 @@ class Client(object):
             values = self._graphdata_values('intradaySleep', date,
                                             args=sleep_id)
             for i,x in enumerate(values):
-                obs = {'sleep_id': sleep_id, 'date': date,
+                obs = {'id': sleep_id, 'date': date,
                        'value': x}
                 obs['time'] = toBedAt + datetime.timedelta(minutes=i)
                 data += [obs]
@@ -115,12 +113,16 @@ class Client(object):
         # Sleep data element
         sleepRecords = html.get_element_by_id("sleep").findall('div')
         for record in sleepRecords:
+            # Ignore if no sleep records
+            if not record.get('id'):
+                continue
+
             data = {'date': date}
             data['id'] = int(record.get('id').split('.')[1])
             
             sleepIndicator = record.get_element_by_id('sleepIndicator')
             quality = SLEEP_QUALITY[ sleepIndicator.get('class') ]
-            efficiency = _pct_to_int(sleepIndicator.find('span').find('span').text)
+            efficiency = _no_pct(sleepIndicator.find('span').find('span').text)
             data['quality'] = quality
             data['efficiency'] = efficiency
             
@@ -208,9 +210,8 @@ class Client(object):
 
         url = self.url_base + path + query_str
         request = urllib2.Request(url, headers={"Cookie": self._request_cookie()})
-        _log.debug("requesting: %s", request.get_full_url())
-
         data = None
+
         try:
             response = urllib2.urlopen(request)
             data = response.read()
@@ -219,7 +220,6 @@ class Client(object):
             data = httperror.read()
             httperror.close()
 
-        #_log.debug("response: %s", data)
         return data
 
     def _graphdata_xml_request(self, graph_type, date, data_version=2108,
@@ -275,7 +275,7 @@ class Client(object):
 
 def _parse_activity_record(el, date):
     """ Return a dictionary of data from the html element containing an activity record"""
-    data = {'data': date}
+    data = {'date': date}
     data['id'] = int(el.get('id').split('.')[1])
 
     # Start Time
@@ -329,7 +329,6 @@ def _parse_activity_log(el, date):
     data['cals'] = int(cals)
 
     return data
-
 
 
 def _strptimestamps(x, dfmt = "%Y/%m/%d"):
