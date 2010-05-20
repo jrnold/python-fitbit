@@ -2,7 +2,7 @@
 
 This client provides an unofficial way to access your data on www.fitbit.com.
 
-This is a fork of http://github.com/wadey/python-fitbit, although I
+This is a fork of [wadey/python-fitbit](http://github.com/wadey/python-fitbit), although I
 have made substantial changes in functionality since the fork. The
 client returns data in a different format, and includes methods to
 capture historical data, all sleep and activity record summaries and
