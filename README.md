@@ -37,15 +37,16 @@ http://www.fitbit.com/user/123ABC, then your user id is 123ABC.
 
 The client has methods to grab the following data 
 
-* Historical data per day
+* Historical data per day   (calories burned, calories eaten, number of steps,
+  distance from steps, active score, minutes lightly active, minutes fairly active, minutes very active)
 * Intraday Steps Taken (per 5 minutes)
 * Calories Burned (per 5 minutes)
 * Active Acore (per 5 minutes)
-* Sleep record summary
-* Sleep record details per minute
-* Logged activities
-* Activity record summary
-* Activity record details: step, distance, pace, and speed per minute
+* Sleep record summary (sleep efficiency, sleep qualiy, time you went to bed, time to fall asleep, times awakened, time in bed, and actual sleep time)
+* Sleep record details. Awake or asleep by minute.
+* Logged activities (activity description, start time, distance, duration, calories burned)
+* Activity record summary (start time, duration, calories burned, steps taken, distance, pace)
+* Activity record details by minute (calories burned, steps taken, pace, speed)
 
 Other data present on fitbit.com for which this api does not have
 method (such as Food and Journal data) was not omitted due any

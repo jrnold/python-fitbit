@@ -60,7 +60,7 @@ class Client(object):
     def historical(self, date, period='1d'):
         """ Return historical data for a day, or period of days.
 
-        I think valid period values are [1d, 7d, 1m, 3m, 6m, 1y, max]
+        valid period values are [1d, 7d, 1m, 3m, 6m, 1y, max]
         where max returns all days since the user signed up
         """
         historical_args = {

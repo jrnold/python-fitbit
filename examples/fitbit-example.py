@@ -12,7 +12,7 @@ uid: 123456
 uis: XXX%3D
 """
 import os
-import fitbit
+from  fitbit import Client
 import ConfigParser
 import datetime
 
@@ -21,17 +21,16 @@ import datetime
 CONFIG = ConfigParser.ConfigParser()
 CONFIG.read(["fitbit.conf", os.path.expanduser("~/.fitbit.conf")])
 
-client = fitbit.Client(CONFIG.get('fitbit', 'user_id'),
-                       CONFIG.get('fitbit', 'sid'),
-                       CONFIG.get('fitbit', 'uid'),
-                       CONFIG.get('fitbit', 'uis'))
+client = Client(CONFIG.get('fitbit', 'user_id'),
+                CONFIG.get('fitbit', 'sid'),
+                CONFIG.get('fitbit', 'uid'),
+                CONFIG.get('fitbit', 'uis'))
 
 yesterday = datetime.date.today() - datetime.timedelta(days=1)
 
 # Daily Historical data for the last month
 historical_data = client.historical(yesterday, period='1m')
 print(historical_data[:5])
-
 
 # Intraday time series 
 steps = client.intraday_steps(yesterday)
