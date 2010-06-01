@@ -119,6 +119,14 @@ class Client(object):
 
             data = {'date': date}
             data['id'] = int(record.get('id').split('.')[1])
+
+            # did sleep record use sensitive algorithm
+            # TODO: xpath syntax would be nicer
+            sleepFormInputs = record.get_element_by_id('sleepRecordEntryInternal%d' % data['id'])
+            for i in sleepFormInputs.findall('input'):
+                if i.get('name') == 'sleepProcAlgorithm':
+                    data['sensitive'] = (i.get('value') == 'SENSITIVE')
+                    # value for normal is 'COMPOSITE'
             
             sleepIndicator = record.get_element_by_id('sleepIndicator')
             quality = SLEEP_QUALITY[ sleepIndicator.get('class') ]
