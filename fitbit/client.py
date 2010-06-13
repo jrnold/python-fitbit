@@ -313,7 +313,14 @@ def _parse_activity_record(el, date):
     return data
 
 def _parse_activity_log(el, date):
-    """ Return a dictionary of data from the html element containing a logged activity"""
+    """Get data from a logged activity
+
+    Arguments:
+    el -- lxml.html.Element instance representing the logged activity
+    date -- Date instance representing the date of the logged activity.
+
+    Returns a dictionary object.
+    """
     data = {'date': date}
 
     # Logged Activity id
@@ -348,7 +355,14 @@ def _parse_activity_log(el, date):
 
 
 def _strptimestamps(x, dfmt = "%Y/%m/%d"):
-    """ Parse timestamps without knowing whether 24 or 12 hour format is used
+    """ Parse timestamps that can be either 24 or 12 hour format
+
+    Arguments:
+    x -- string with the timestamp
+    dfmt -- strptime format for the date. Default is '%Y/%m/%d'
+
+    Returns:
+    datetime object
     """
     if re.search("[AP]M", x, re.I):
         tfmt = "%I:%M %p"
@@ -357,17 +371,27 @@ def _strptimestamps(x, dfmt = "%Y/%m/%d"):
     return datetime.datetime.strptime(x, ' '.join([dfmt, tfmt]))
         
 def _parseDatePath(x):
-    """ returns a date object from a string like /path/yyyy/mm/dd """
+    """Returns a date object from a string like /path/yyyy/mm/dd"""
     return datetime.date(*[int(d) for d in x.split("/")[-3:]])
 
 def _date_to_path(x):
-    """ converts date to path string like yyyy/mm/dd"""
+    """Converts date to a path string like yyyy/mm/dd"""
     return x.strftime("%Y/%m/%d")
 
 def _no_comma(x):
+    """Remove commas from string representing an integer
+
+    Returns:
+    int object
+    """
     return int(x.replace(',', ''))
 
 def _no_pct(x):
+    """Remove percent sign from string representing a percent integer
+
+    Returns:
+    int object
+    """
     return int(x.replace('%', ''))
 
 def _pace(x):
