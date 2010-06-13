@@ -42,7 +42,7 @@ The client has methods to grab the following data.
 * Intraday Steps Taken (per 5 minutes)
 * Calories Burned (per 5 minutes)
 * Active Score (per 5 minutes)
-* Sleep record summary (sleep efficiency, sleep quality, time you went to bed, time to fall asleep, times awakened, time in bed, and actual sleep time)
+* Sleep record summary (sleep efficiency, sleep quality, time you went to bed, time to fall asleep, times awakened, time in bed, and actual sleep time, sensitive or normal algorithm used)
 * Sleep record details by minute (level of sleep)
 * Logged activities (activity description, start time, distance, duration, calories burned)
 * Activity record summary (start time, duration, calories burned, steps taken, distance, pace)
