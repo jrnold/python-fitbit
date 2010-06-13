@@ -91,6 +91,7 @@ class SleepLog(Base):
     timesAwakened = Column(Integer)
     timeInBed = Column(TimeDelta)
     timeAsleep = Column(TimeDelta)
+    sensitive = Column(Boolean)
 
 
 class Sleep(Base):
@@ -100,6 +101,7 @@ class Sleep(Base):
                   ForeignKey('intraday_calories.time'),
                   primary_key=True)
     id = Column(Integer, ForeignKey('sleep_log.id'))
+    sensitive = Column(Boolean)
     value = Column(Integer)
 
 

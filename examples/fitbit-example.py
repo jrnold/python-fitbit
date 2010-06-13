@@ -16,7 +16,6 @@ from  fitbit import Client
 import ConfigParser
 import datetime
 
-
 # Fitbit Configuration
 CONFIG = ConfigParser.ConfigParser()
 CONFIG.read(["fitbit.conf", os.path.expanduser("~/.fitbit.conf")])
@@ -50,9 +49,15 @@ sleep = client.sleep_log(yesterday)
 print(sleep[:3])
 
 # By minute detailed data of all sleep records for a date
-sleep = client.intraday_sleep(yesterday)
-print(sleep[:3])
+intraday_sleep = client.intraday_sleep(yesterday)
+print(intraday_sleep[:3])
 
+# Summaries of all sleep records for a date, with a sleepProcAlgorithm specified
+sleep2 = client.sleep_log(yesterday, 'SENSITIVE')
+print(sleep2[:3])
+
+intraday_sleep2 = client.intraday_sleep(yesterday, 'COMPOSITE')
+print(intraday_sleep2[:3])
 
 # Activity Records
 
