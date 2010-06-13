@@ -3,6 +3,7 @@ import lxml.html
 import datetime
 import urllib
 import urllib2
+import urlparse
 import re
 
 class Client(object):
@@ -32,7 +33,7 @@ class Client(object):
         """
         return self._graphdata_intraday_request("intradaySteps", date)
     
-    def intraday_sleep(self, date):
+    def intraday_sleep(self, date, algorithm=None):
         """Retrieve the sleep status for every 1 minute interval
         the format is: [(datetime.datetime, sleep_value), ...]
         The statuses are:
@@ -41,19 +42,40 @@ class Client(object):
             2: awake
             3: very awake
         """
-        sleep_log = self.sleep_log(date)
-
+        
         data = []
-        for sleep in  sleep_log:
+        html = lxml.html.fromstring(self._request("/sleep/" + _date_to_path(date)))
+        # Sleep data elements
+        sleepRecords = html.get_element_by_id("sleep").findall('div')
+        for record in sleepRecords:
+            # Ignore if no sleep records
+            if not record.get('id'):
+                continue
+            sleep = _parse_sleep_record(record)
+
+            # If an algorithm is specified, a POST request must be used to update the record
+            algo = None
+            if algorithm == "SENSITIVE" and not sleep['sensitive']:
+                sleep = self._update_sleepProcAlgorithm(record, 'SENSITIVE')
+                algo = 'COMPOSITE'
+            elif algorithm == "COMPOSITE" and sleep['sensitive']:
+                sleep = self._update_sleepProcAlgorithm(record, 'COMPOSITE')
+                algo = 'SENSITIVE'
+
             sleep_id = sleep['id']
             toBedAt = sleep['toBedAt']
+            sensitive = sleep['sensitive']
             values = self._graphdata_values('intradaySleep', date,
                                             args=sleep_id)
             for i,x in enumerate(values):
-                obs = {'id': sleep_id, 'date': date,
+                obs = {'id': sleep_id, 'date': date, 'sensitive': sensitive,
                        'value': x}
                 obs['time'] = toBedAt + datetime.timedelta(minutes=i)
                 data += [obs]
+
+            if algo:
+                self._update_sleepProcAlgorithm(record, algo)
+            
         return data
 
     # Historical Data to grab
@@ -113,15 +135,15 @@ class Client(object):
             # Ignore if no sleep records
             if not record.get('id'):
                 continue
-            data = [_parse_sleep_record(record)]
+            data = _parse_sleep_record(record)
 
             # If an algorithm is specified, a POST request must be used to update the record
             if algorithm == "SENSITIVE" and not data['sensitive']:
-                data = _update_sleepProcAlgorithm(record, 'SENSITIVE')
-                _update_sleepProcAlgorithm(record, 'COMPOSITE')
+                data = self._update_sleepProcAlgorithm(record, 'SENSITIVE')
+                self._update_sleepProcAlgorithm(record, 'COMPOSITE')
             elif algorithm == "COMPOSITE" and data['sensitive']:
-                data = _update_sleepProcAlgorithm(record, 'COMPOSITE')
-                _update_sleepProcAlgorithm(record, 'SENSITIVE')
+                data = self._update_sleepProcAlgorithm(record, 'COMPOSITE')
+                self._update_sleepProcAlgorithm(record, 'SENSITIVE')
              
             dailyRecords += [data]
 
@@ -133,9 +155,8 @@ class Client(object):
         html = lxml.html.fromstring(self._request("/activities/" + _date_to_path(date)))
         activityList = html.get_element_by_id("activityList")
         for li in activityList.findall(".//li"):
-            li_id = li.get('id')
             ## not an activity log
-            if not li_id:
+            if not li.get('id'):
                 continue
 
             data = _parse_activity_log(li, date)
@@ -256,17 +277,25 @@ class Client(object):
         data = [ (_parseDatePath(v.get('url')), float(v.text)) for v in values]
         return data
 
-    def _update_sleepProcAlgorithm(self, entryId, form, procAlgorithm):
+    def _update_sleepProcAlgorithm(self, record, procAlgorithm):
+
+        # sleep record id
+        entryId = int(record.get('id').split('.')[1])
+
+        # data from form
+        data = dict(record.forms[0].form_values())
+        data['sleepProcAlgorithm'] = procAlgorithm
+
         params = {'entryId' : entryId,
                   'apiFormat' : 'htmljson',
                   'update' : 'on'}
-
-        data = dict(form.form_values())
-        data['sleepProcAlgorithm'] = procAlgorithm
         
         response = self._request('/sleep/sleepAnnotation?%s' % urllib.urlencode(params),
                                  data = urllib.urlencode(data))
-        return response
+
+        newRecord = _parse_sleep_record(lxml.html.fromstring(response).find("div/div"))
+        
+        return newRecord
         
 
 def _parse_activity_record(el, date):
