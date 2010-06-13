@@ -197,30 +197,27 @@ class Client(object):
                                valuesCategoryEnabled='true',
                                dataVersion=58)
 
-    def _request_cookie(self):
-        return  "sid=%s; uid=%s; uis=%s" % (self.sid, self.uid, self.uis)
-
     def _request(self, path, **kwargs):
+        """request a page from fitbit.com
 
-        parameters = dict([(k,v) for k,v in kwargs.items() if v])
-        if parameters:
-            query_str = '?' + urllib.urlencode(parameters)
-        else:
-            query_str = ''
+        Arguments:
+        path -- path from self.url_base
+        **kwargs -- keyword arguments passed to urllib2.Request
+        """
 
-        url = self.url_base + path + query_str
-        request = urllib2.Request(url, headers={"Cookie": self._request_cookie()})
-        data = None
+        url = urlparse.urljoin(self.url_base, path)
+        request = urllib2.Request(url, **kwargs)
+        
+        # add cookie to header of reqest
+        cookie = "sid=%s; uid=%s; uis=%s" % (self.sid, self.uid, self.uis)
+        request.add_header('Cookie', cookie)
 
         try:
-            response = urllib2.urlopen(request)
-            data = response.read()
-            response.close()
+            response = urllib2.urlopen(request).read()
         except urllib2.HTTPError as httperror:
-            data = httperror.read()
-            httperror.close()
+            response = httperror.read()
 
-        return data
+        return response
 
     def _graphdata_xml_request(self, graph_type, date, data_version=2108,
                                         **kwargs):
@@ -237,7 +234,7 @@ class Client(object):
         if kwargs:
             params.update(kwargs)
 
-        data = self._request("/graph/getGraphData", **params)
+        data = self._request("/graph/getGraphData?%s" % urllib.urlencode(params))
         return etree.fromstring(data.strip())
 
     def _graphdata_intraday_request(self, graph_type, date):
@@ -272,9 +269,28 @@ class Client(object):
         data = [ (_parseDatePath(v.get('url')), float(v.text)) for v in values]
         return data
 
+    def _update_sleepProcAlgorithm(self, entryId, form, procAlgorithm):
+        params = {'entryId' : entryId,
+                  'apiFormat' : 'htmljson',
+                  'update' : 'on'}
+
+        data = dict(form.form_values())
+        data['sleepProcAlgorithm'] = procAlgorithm
+        
+        response = self._request('/sleep/sleepAnnotation?%s' % urllib.urlencode(params),
+                                 data = urllib.urlencode(data))
+        return response
+        
 
 def _parse_activity_record(el, date):
-    """ Return a dictionary of data from the html element containing an activity record"""
+    """Get data from an activity record
+
+    Arguments:
+    el -- lxml.html.Element instance representing the logged activity
+    date -- Date instance representing the date of the logged activity.
+
+    Returns a dictionary object.
+    """
     data = {'date': date}
     data['id'] = int(el.get('id').split('.')[1])
 
