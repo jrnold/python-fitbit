@@ -73,6 +73,8 @@ class Client(object):
                 obs['time'] = toBedAt + datetime.timedelta(minutes=i)
                 data += [obs]
 
+            1 / 0
+
             if algo:
                 self._update_sleepProcAlgorithm(record, algo)
             
@@ -227,22 +229,23 @@ class Client(object):
 
         return response
 
-    def _graphdata_xml_request(self, graph_type, date, data_version=2108,
+    def _graphdata_xml_request(self, graph_type, date, data_version=663,
                                         **kwargs):
-        params = dict(
-            userId=self.user_id,
-            type=graph_type,
-            version="amchart",
-            dataVersion=data_version,
-            chart_Type="column2d",
-            period="1d",
-            dateTo=str(date)
-        )
+        params = { 
+            'userId' : self.user_id,
+            'type' : graph_type,
+            'version' : "amchart",
+            'dataVersion' : data_version,
+            'chart_Type' : "column2d",
+            'period' : "1d",
+            'dateTo' : str(date)
+        }
         
         if kwargs:
             params.update(kwargs)
 
         data = self._request("/graph/getGraphData?%s" % urllib.urlencode(params))
+
         return etree.fromstring(data.strip())
 
     def _graphdata_intraday_request(self, graph_type, date):
@@ -252,6 +255,7 @@ class Client(object):
         dt = datetime.datetime(*date.timetuple()[:5])
 
         data = []
+        
         # the last observation is midnight of the next day so I ignore it
         for i,x in enumerate(values[:-1]):
             obs = {'date': date, 'value': x}
