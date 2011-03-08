@@ -2,12 +2,13 @@
 from setuptools import setup, find_packages
 
 setup(name="fitbit",
-      version="0.1",
-      description="Library for grabbing data from www.fitbit.com",
-      author="Wade Simmons",
-      author_email="wade@wades.im",
+      version="0.3",
+      description="Fitbit Client API",
+      author="Jeffrey Arnold",
+      author_email="jeffrey.arnold@gmail.com",
       url="http://github.com/wadey/python-fitbit",
-      packages = find_packages(),
+      packages = ['fitbit'],
+      requires = ['oauth2'],
       license = "MIT License",
       keywords="fitbit",
       zip_safe = True)
